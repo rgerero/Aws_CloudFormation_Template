@@ -1,0 +1,83 @@
+
+Parameters:
+    InstanceTypeParam:
+        Description: Select Instance Type
+        Type: String
+        Default: t2.micro
+        AllowedValues:
+            - t2.micro
+            - m1.small
+            - m1.large
+        Description: Entry  the instance type
+    Environment:
+        Type: String
+        AllowedValues:
+            - dev
+            - qa
+            - prod
+    KeyName:
+        Type: "AWS::EC2::KeyPair::KeyName"   
+        Description: Select available key/pair
+            
+Mappings:
+    EnvMap:
+        dev:
+            instanceType: "t2.micro"
+            name: "dev"
+        qa:
+            instanceType: "t2.medium"
+            name: "qa"
+        prod:
+            instanceType: "t2.xlarge"
+            name: "prod"        
+        
+Resources:  
+    EC2Instance:
+        Type: AWS::EC2::Instance
+        Properties:
+            AvailabilityZone: ap-southeast-1a
+            InstanceType: !FindInMap [EnvMap, !Ref Environment, instanceType]
+            ImageId: ami-0df6af18544021a72 #windows
+            KeyName: !Ref KeyName
+            SecurityGroups:
+                - !Ref EC2SecurityGroup  # Reference your Security Group
+            UserData:                  # Use UserData to run commands during instance launch (optional)
+                Fn::Base64: |
+                  <powershell>
+                  # Enable RDP
+                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+                  Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+                  </powershell>
+            Tags:
+                - Key: "Name"
+                  Value: !FindInMap [EnvMap, !Ref Environment, name]
+                  
+    EC2SecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+          GroupDescription: Enable RDP and any other necessary ports
+          SecurityGroupIngress:
+            - IpProtocol: tcp
+              FromPort: 3389     # RDP port
+              ToPort: 3389
+              CidrIp: 0.0.0.0/0  # Allow RDP access from anywhere (for demonstration purposes)
+            # Add more ingress rules as needed for your use case
+        
+    S3Bucket: #logical id/name
+        Type: AWS::S3::Bucket #type of Resources
+        Properties:
+            BucketName: "tbucket0223"
+        DependsOn: 
+            - EC2Instance
+            
+Outputs:
+    Ec2InstanceName:
+        Value: !Ref EC2Instance
+    AZ:
+        Value: !GetAtt ["EC2Instance","AvailabilityZone"]
+    PublicDNS:
+        Value: !GetAtt ["EC2Instance","PublicDnsName"]
+    PublicIP:
+        Value: !GetAtt ["EC2Instance","PublicIp"]
+    S3BucketName:
+        Value: !Ref S3Bucket
